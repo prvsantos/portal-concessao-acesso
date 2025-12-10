@@ -1,0 +1,56 @@
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Development files
+.git/
+.gitignore
+*.md
+!README.md
+
+# Build artifacts
+dist/
+.wrangler/
+.mf/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+*.log.*
+.pm2/
+pids/
+
+# Environment
+.env
+.env.*
+.dev.vars
+
+# Test
+coverage/
+.nyc_output/
+
+# Temp files
+*.tmp
+*.temp
+*.backup
+*.bak
+*.tar.gz
+*.zip
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore

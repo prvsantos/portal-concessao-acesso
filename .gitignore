@@ -29,3 +29,15 @@ logs/
 *.bak
 *.tar.gz
 *.zip
+backups/
+
+# Docker
+.env.production
+certbot/
+nginx/ssl/*.crt
+nginx/ssl/*.key
+nginx/ssl/*.pem
+
+# Logs
+logs/
+*.log

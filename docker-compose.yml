@@ -1,0 +1,147 @@
+# ============================================
+# Docker Compose - Ambiente de Homologação
+# Portal de Concessão de Acesso
+# ============================================
+
+version: '3.8'
+
+services:
+  # Aplicação Principal
+  portal-acesso:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: portal-acesso-homolog
+    hostname: portal-acesso
+    restart: unless-stopped
+    
+    # Portas
+    ports:
+      - "3000:3000"
+    
+    # Variáveis de Ambiente
+    environment:
+      - NODE_ENV=staging
+      - PORT=3000
+      - HOST=0.0.0.0
+      - SEED_DATABASE=true
+      - TZ=America/Sao_Paulo
+    
+    # Volumes para persistência de dados
+    volumes:
+      # Banco de dados D1 (SQLite)
+      - portal-data:/app/.wrangler/state/v3/d1
+      # Logs da aplicação
+      - portal-logs:/app/logs
+      # Configurações customizadas (opcional)
+      - ./config:/app/config:ro
+    
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/aplicacoes"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Recursos
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Rede
+    networks:
+      - portal-network
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Labels para organização
+    labels:
+      - "com.portal.acesso.environment=homologacao"
+      - "com.portal.acesso.version=1.0.0"
+      - "com.portal.acesso.description=Sistema de Gerenciamento de Acessos"
+
+  # Nginx Reverse Proxy (opcional)
+  nginx:
+    image: nginx:alpine
+    container_name: portal-nginx
+    restart: unless-stopped
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    
+    depends_on:
+      portal-acesso:
+        condition: service_healthy
+    
+    networks:
+      - portal-network
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    
+    labels:
+      - "com.portal.acesso.service=reverse-proxy"
+
+  # Ferramenta de monitoramento (opcional)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portal-portainer
+    restart: unless-stopped
+    
+    ports:
+      - "9000:9000"
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    
+    networks:
+      - portal-network
+    
+    labels:
+      - "com.portal.acesso.service=monitoring"
+
+# Volumes
+volumes:
+  portal-data:
+    driver: local
+    name: portal-acesso-data
+  portal-logs:
+    driver: local
+    name: portal-acesso-logs
+  nginx-logs:
+    driver: local
+    name: portal-nginx-logs
+  portainer-data:
+    driver: local
+    name: portal-portainer-data
+
+# Redes
+networks:
+  portal-network:
+    driver: bridge
+    name: portal-acesso-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,201 @@
+# ============================================
+# Docker Compose - Ambiente de Produção
+# Portal de Concessão de Acesso
+# ============================================
+# 
+# ATENÇÃO: Este arquivo é para referência de produção
+# Recomenda-se usar orquestrador (Kubernetes, Docker Swarm)
+# para ambientes de produção reais
+#
+# ============================================
+
+version: '3.8'
+
+services:
+  # Aplicação Principal
+  portal-acesso:
+    image: portal-acesso:latest
+    container_name: portal-acesso-prod
+    hostname: portal-acesso
+    restart: always
+    
+    # Portas (apenas interna - nginx faz proxy)
+    expose:
+      - "3000"
+    
+    # Variáveis de Ambiente
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - SEED_DATABASE=false
+      - TZ=America/Sao_Paulo
+      # Adicione aqui variáveis de integração AD/Azure
+      # - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID}
+      # - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET}
+      # - AZURE_AD_TENANT_ID=${AZURE_AD_TENANT_ID}
+    
+    # Variáveis de ambiente de arquivo (secrets)
+    env_file:
+      - .env.production
+    
+    # Volumes para persistência de dados
+    volumes:
+      # Banco de dados D1 (SQLite) - usar volume nomeado em produção
+      - portal-data-prod:/app/.wrangler/state/v3/d1
+      # Logs da aplicação
+      - portal-logs-prod:/app/logs
+      # Backup do banco
+      - ./backups:/app/backups:rw
+    
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/aplicacoes"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    
+    # Recursos (ajustar conforme necessidade)
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 30s
+    
+    # Rede
+    networks:
+      - portal-network-prod
+    
+    # Logging (enviar para sistema centralizado em produção)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service,environment"
+    
+    # Labels
+    labels:
+      - "com.portal.acesso.environment=production"
+      - "com.portal.acesso.version=1.0.0"
+      - "traefik.enable=true"
+      - "traefik.http.routers.portal.rule=Host(`portal.empresa.com`)"
+      - "traefik.http.services.portal.loadbalancer.server.port=3000"
+
+  # Nginx Reverse Proxy com SSL
+  nginx:
+    image: nginx:alpine
+    container_name: portal-nginx-prod
+    restart: always
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs-prod:/var/log/nginx
+      # Certificados Let's Encrypt
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    
+    depends_on:
+      portal-acesso:
+        condition: service_healthy
+    
+    networks:
+      - portal-network-prod
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    
+    labels:
+      - "com.portal.acesso.service=reverse-proxy"
+
+  # Certbot para SSL automático (Let's Encrypt)
+  certbot:
+    image: certbot/certbot
+    container_name: portal-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - portal-network-prod
+
+  # Backup automatizado (opcional)
+  backup:
+    image: alpine:latest
+    container_name: portal-backup
+    restart: unless-stopped
+    
+    volumes:
+      - portal-data-prod:/data:ro
+      - ./backups:/backups:rw
+    
+    environment:
+      - BACKUP_SCHEDULE=0 2 * * *  # 2 AM diariamente
+      - BACKUP_RETENTION_DAYS=30
+    
+    command: >
+      sh -c "
+      while true; do
+        echo 'Aguardando próximo backup...'
+        sleep 86400
+        echo 'Executando backup...'
+        tar -czf /backups/portal-backup-$$(date +%Y%m%d-%H%M%S).tar.gz /data
+        find /backups -name '*.tar.gz' -mtime +$$BACKUP_RETENTION_DAYS -delete
+        echo 'Backup concluído!'
+      done
+      "
+    
+    networks:
+      - portal-network-prod
+
+# Volumes de Produção
+volumes:
+  portal-data-prod:
+    driver: local
+    name: portal-acesso-data-prod
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/portal-acesso/data
+  portal-logs-prod:
+    driver: local
+    name: portal-acesso-logs-prod
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/log/portal-acesso
+  nginx-logs-prod:
+    driver: local
+    name: portal-nginx-logs-prod
+
+# Redes de Produção
+networks:
+  portal-network-prod:
+    driver: bridge
+    name: portal-acesso-network-prod
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
