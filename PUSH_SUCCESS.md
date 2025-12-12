@@ -104,29 +104,19 @@ portal-concessao-acesso/
 
 ## 📋 Próximos Passos
 
-### 1️⃣ Adicionar GitHub Actions Workflow (Opcional mas Recomendado)
+### 1️⃣ GitHub Actions Workflow ✅ Incluído
 
-O workflow foi preparado mas precisa ser adicionado manualmente:
+O workflow do GitHub Actions já está configurado e pronto para usar!
 
-```bash
-# Opção 1: Via Interface Web
-1. Acesse: https://github.com/prvsantos/portal-concessao-acesso
-2. Clique em "Add file" > "Create new file"
-3. Digite: .github/workflows/docker-build.yml
-4. Copie conteúdo de .github-examples/docker-build.yml
-5. Commit changes
-
-# Opção 2: Clone e adicione localmente
-git clone https://github.com/prvsantos/portal-concessao-acesso.git
-cd portal-concessao-acesso
-mkdir -p .github/workflows
-cp .github-examples/docker-build.yml .github/workflows/
-git add .github/workflows/
-git commit -m "Add GitHub Actions workflow"
-git push origin main
-```
+**Branch homolog** inclui o workflow completo:
+- Build automático de imagens Docker
+- Push para GitHub Container Registry
+- Scanner de vulnerabilidades Trivy
+- Multi-arquitetura (amd64 + arm64)
 
 📖 **Guia completo**: Veja `GITHUB_SETUP.md` no repositório
+
+**Verificar**: https://github.com/prvsantos/portal-concessao-acesso/actions
 
 ### 2️⃣ Testar Deploy Local
 
